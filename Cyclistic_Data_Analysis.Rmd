@@ -1,0 +1,188 @@
+---
+title: "Cylistic_Project"
+author: "Arjun Krishna"
+date: "2022-08-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# The Cyclistic Data Analysis
+
+ The Cyclistic bike sharing company operating in Chicago with 692 stations and more than 5,800 bicycles with geotracking system have a huge customer basis. The Customers who purchase annual memberships are Cyclistic members where as other users are regarded as customers.
+
+Cyclistic’s finance analysts have concluded that annual members are much more profitable than casual riders. Although the pricing flexibility helps Cyclistic attract more customers, Management believes that maximizing the number of annual members will be key to future growth. 
+
+### Goal of the analysis
+
+The goal of this analysis is to identify the trends and patterns followed by all the customers of Cyclistic and find the factors that differentiate between annual member and casual riders for implementing marketing strategies aimed at increasing the annual membership.
+
+## Stage 1: Ask
+
+Three questions will guide the future marketing program:
+*1. How do annual members and casual riders use Cyclistic bikes differently?
+*2. Why would casual riders buy Cyclistic annual memberships?
+*3. How can Cyclistic use digital media to influence casual riders to become members?
+
+## Stage 2: Prepare
+
+The data required for the analysis is given by Google (https://divvy-tripdata.s3.amazonaws.com/index.html). The dataset includes four csv files from each quarter in the year 01 January 2019 to 31 December 2019. The data consistency is checked thoroughly. 
+
+### - Data organization:
+- Number of coloumns: 12
+- Number of rows: Quarter one(Q1) =355069, Quarter two(Q2) = 1048575, Quarter three(Q3) = 1048575, Quarter four(Q4) = 704054
+- Column names: "Rental_ID", "Start_Time","End_Time", "Bike_ID", "Duration", "Start_Station_ID", "Start_Station_Name", "End_Station_ID", "End_Station_Name", "User _Type", "Gender", "Birthday_Year" 
+
+#### - Changes made:
+
+* The start and end time columns in Q3 and Q4 had short date format compared to the long date format in Q1 and Q2. This was modified to.
+* Column names of all the Quarters had minor differences, this was rectified.
+
+
+### Stage 3: Process
+
+All 4 csv files are imported to Rstudios. It is important that the data used in the analysis should be clean.  
+```{r}
+library("tidyverse")
+```
+Installing tidyverse package which is designed to make it easy to install and load core packages from the tidyverse in a single command
+
+```{r}
+cyclistic_raw_data<- list.files(path = "C:/Users/arjun/OneDrive/Documents/Data Analytics",pattern = "*.csv", full.names = TRUE) %>%
+  lapply(read_csv) %>%										
+  bind_rows	
+```
+The quarterly data of Cyclistic company is combined from 4 different csv files downloaded from thE website. The csv files are inspected beforehand to ensure the identical format.
+
+```{r}
+head(cyclistic_raw_data)
+tail(cyclistic_raw_data)
+
+```
+The first 6 and last 6 rows of the uploaded file is checked to get an overall idea
+
+```{r}
+colnames(cyclistic_raw_data)
+colnames(cyclistic_raw_data)[10] <- "User"
+cyclistic_clean_data<- cyclistic_raw_data
+```
+The column names are checked as part of the cleaning process. It is identified that the 10th column which represents the type of user(customer or subscriber) is having unwanted space in between. Hence the coloumn name is changed to "User" and the cleaned data is saved in "cyclistic_clean_data" data frame.
+
+```{r}
+cyclistic_clean_data<- drop_na(cyclistic_clean_data) 
+print(nrow(cyclistic_raw_data)-nrow(cyclistic_clean_data))
+print("Rows removed")
+```
+For consistency and error free analysis, all rows with blank or NA values are removed
+```{r}
+cyclistic_clean_data<- distinct(cyclistic_clean_data)
+```
+The elimination of duplicate data is ensured
+```{r}
+library("base")
+library("dplyr")
+library("xts")
+
+cyclistic_clean_data$Start_Time <- as.POSIXct( cyclistic_clean_data$Start_Time, format="%d %B %Y" )
+cyclistic_clean_data$End_Time <- as.POSIXct( cyclistic_clean_data$End_Time, format="%d %B %Y" )
+```
+The data type of Start and Stop time of ride is changed from character to date format for analysis
+
+
+```{r}
+cyclistic_process_data<-cyclistic_clean_data%>%
+  mutate(Weekday=weekdays(Start_Time))%>%
+  mutate(Month=months(Start_Time))
+```
+
+For better understanding the user habits and preferences we need to extract the weekdays and month from the start and end date column
+
+```{r}
+glimpse(cyclistic_process_data)
+```
+glimpse() produces column names, data, datatypes, number of rows and columns all in a single command which is of great help during data cleaning and processing 
+
+```{r}
+cyclistic_process_data<- cyclistic_process_data%>%
+  mutate(Age=2019-Birthday_Year)
+```
+The age is a critical factor in analyzing the trend and studying the user base, hence age is extracted from the year of birth (subtracting 2019) from which the data is taken
+
+
+```{r}
+cyclistic_process_data%>%
+  group_by(User)%>%
+  summarise(Number_of_Users=n(),Percentage_Users=(n()/nrow(cyclistic_process_data))*100,Total_duration=sum(Duration),Mean_Duration=mean(Duration))
+
+```
+From the data, clear stats about the distribution of customers and subscribers is understood;
+* Subscribers is fairly high compared to customers
+* The large amount of subscribers although fail to surpass the mean duration of casual riders
+
+
+## Stage 4: Analyze
+
+### 1) Number of customers based on Gender and User type
+
+```{r}
+ggplot(data= cyclistic_process_data,aes(x=Gender,fill=User))+geom_bar(width=0.5,position='dodge')+theme_light()+labs(y="Number of users",title=("Fig 1. Total Number of Users VS Gender"))
+```
+
+
+### Observations
+* Males Subscribers dominates in total number of users 
+* Number of casual customers are almost same for both Male and Female
+
+
+### 2) Frequency of usage by different age group
+```{r}
+age_df<-as.data.frame(t(table(cyclistic_process_data$Age)))
+age_df<-arrange(age_df,desc(Freq))
+age_df$Var2<- as.numeric(as.character(age_df$Var2))  #converting directly creates error
+age_df<- subset(age_df,Var2<75)
+```
+
+A new data frame is created to record the age and frequency at which it repeats, it will help us to identify which age group is mainly using the service. 
+```{r}
+ggplot(data= age_df,aes(x=Var2,y=Freq) )+geom_point(colour='red')+geom_smooth(span=0.3)+scale_x_continuous(breaks =seq(0,75,by=5))+labs(x="Age",y="Frequency",title="Fig 2. Frequency VS Age")+theme_bw()
+```
+
+
+### Observations
+* The graph establishes clear number of users from the age 20-35.
+* As age increases people are less likely to use cycles.  
+
+### 3) The relationship between Age and User
+
+```{r}
+ggplot(cyclistic_process_data, aes(x=Age, fill=User)) + geom_bar(position=position_dodge())+scale_y_continuous(limit=c(0,160000,by=50000))+scale_x_continuous(limit=c(15,75,by=5))+coord_flip()+theme_classic()+labs(x='Age',y='Users',title="Fig 3. Age VS User")+theme (axis.text.x = element_text (angle=45, vjust=.5, hjust=0.5))
+```
+
+
+### Observations
+* The graph aims to analyze which age group has more casual customers, thus helping to identify what audience to target while marketing 
+
+### 4) Total duration covered during weekdays
+```{r}
+ggplot(cyclistic_process_data, aes(x=Weekday, y=Duration,fill=User)) + geom_bar(colour='red',stat='summary',position='dodge',fun='sum',width = 0.60)+theme_classic()+labs(x='Weekday',y='Duration',title="Fig 4. Duration vs Weekday")+theme (axis.text.x = element_text (angle=90, vjust=.5, hjust=0.5))
+```
+
+### 5) Total duration covered throughout the year
+
+```{r}
+ggplot(cyclistic_process_data, aes(x=Month, y=Duration,fill=User)) + geom_bar(position='dodge',stat='summary',fun='sum',width = 0.60)+theme_classic()+labs(x='Month',y='Duration',title = "Fig 5. Duration vs Month")+theme (axis.text.x = element_text (angle=90, vjust=.5, hjust=0.5))
+```
+### Observation 
+* The graph shows the difference in duration of ride throughout an year, this helps us to analyze that throughout which month company generates more revenue and which months are lagging behind. Also sufficient steps can be taken to attract more customers during the time frame.
+* Also it can be noted that customers are more during summer 
+
+
+
+
+
+
+
+
+
